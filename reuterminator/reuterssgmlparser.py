@@ -11,8 +11,8 @@ import os.path
 ####
 class ReutersSGMLParser(sgmllib.SGMLParser):
 
-    DATA_SET_DIRECTORY = '../SmallDataset/'
-    #DATA_SET_DIRECTORY = '../Datasets/'
+    #DATA_SET_DIRECTORY = '../SmallDataset/'
+    DATA_SET_DIRECTORY = '../Datasets/'
 
     def __init__(self, verbose=1):
         sgmllib.SGMLParser.__init__(self, verbose)
@@ -45,6 +45,8 @@ class ReutersSGMLParser(sgmllib.SGMLParser):
         self.docs = {}
         self.places = []
         self.all_topics = []
+        self.all_places = []
+        self.all_places_dict = {}
     def parse_all_docs(self):
 
         """Parse the given string file_string, which is an SGML encoded file."""
@@ -59,6 +61,9 @@ class ReutersSGMLParser(sgmllib.SGMLParser):
             f.close()
             print 'Items parsed: ', len(self.docs.keys())
 
+        for place,freq in self.all_places_dict.iteritems():
+            if freq > 2000:
+                self.all_places.remove(place)
         self.close()
 
     def get_parsed_dataset(self):
@@ -66,6 +71,9 @@ class ReutersSGMLParser(sgmllib.SGMLParser):
 
     def get_all_topics(self):
         return self.all_topics
+
+    def get_all_places(self):
+        return self.all_places
 
     #handle_data method is called in between start_<tag> and end_<tag>
 
@@ -78,14 +86,19 @@ class ReutersSGMLParser(sgmllib.SGMLParser):
             self.title += data.lower()
         elif self.in_dateline:
             self.dateline += data.lower()
+
         elif self.in_topic:
             self.topics.append(data.lower())
             if data.lower() not in self.all_topics:
                 self.all_topics.append(data.lower())
+
         elif self.in_places:
             self.places.append(data.lower())
-
-
+            if data.lower() not in self.all_places:
+                self.all_places.append(data.lower())
+                self.all_places_dict[data.lower()] = 1
+            else:
+                self.all_places_dict[data.lower()] += 1
     ####
     # Handle the Reuters tag
     ####

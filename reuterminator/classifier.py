@@ -1,70 +1,57 @@
 import json
 from nltk.classify.scikitlearn import SklearnClassifier
+from sklearn.neighbors import KNeighborsClassifier
 from sklearn.naive_bayes import *
-from sklearn.svm import SVC
-from sklearn.tree import *
+from sklearn.svm import LinearSVC
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.metrics import classification_report
 import time
 from sklearn.feature_extraction import DictVectorizer
-from nltk.classify import DecisionTreeClassifier
 import numpy as np
 class Classifier:
-    def __init__(self, feature_type):
+    def __init__(self, feature_type, classifier_type, sparse_flag):
         self.feature_type = feature_type
+        self.classifier = classifier_type
         self.feature_vectors = {}
         self.feature_vectors_tuples_for_train = []
         self.feature_vectors_tuples_for_test = []
+        self.vectorizer = None
+        self.sparse_flag = sparse_flag
 
-
-    def create_word_dict(self):
-        self.feature_vectors = self.convert_to_utf(json.load(open(self.feature_type+'.json')))
-        word_dict = {}
-        i = 0
-        for topic,topic_vector in self.feature_vectors.iteritems():
-            #print topic
-            for doc_id,feature_vector in topic_vector.iteritems():
-                i = i+1
-                for word,freq in feature_vector['term_frequencies'].iteritems():
-                    if word not in word_dict:
-                        word_dict[word] = 1 #freq
-                    else:
-                        word_dict[word] += 1
-
-        print i
-        s=open('word_dict.json','w')
-        json.dump(word_dict, s)
-        s.close()
 
     def prepare_data_for_classify(self):
         self.feature_vectors = self.convert_to_utf(json.load(open(self.feature_type+'.json')))
+        print "No of topics is ", len(self.feature_vectors)
         print "preparing data"
         self.preprare_train_and_test_set()
 
 
-    def classify_naive_bayes(self, classifier_type):
+    def train_classifier(self):
         #classifier = SklearnClassifier(classifier_type)
-        clf = classifier_type
+        #self.classifier = classifier_type
         X = np.array([feature_vector[0] for feature_vector in self.feature_vectors_tuples_for_train])
         Y = np.array([feature_vector[1] for feature_vector in self.feature_vectors_tuples_for_train])
+        self.vectorizer = DictVectorizer(dtype=float, sparse=self.sparse_flag)
+        X = self.vectorizer.fit_transform(X)
+        #if self.sparse_flag:
+         #   X = X.toarray()
         print "training"
-        vectorizer = DictVectorizer(dtype=float, sparse=True)
-        X = vectorizer.fit_transform(X)
-        clf.fit(X,Y)
-        #classifier.train(self.feature_vectors_tuples_for_train)
+        self.classifier.fit(X,Y)
+
+    def test_classifier(self):
         print "testing classifier"
-        X_test = vectorizer.transform(np.array([feature_vector[0] for feature_vector in self.feature_vectors_tuples_for_test]))
-        classified_labels = clf.predict(X_test)
-        #for i in range(0,len(predicted_list)):
-         #   print predicted_list[i] == self.feature_vectors_tuples_for_test[i][1]
-        #classified_labels =  classifier.batch_classify([feature_set_tuple[0] for feature_set_tuple in self.feature_vectors_tuples_for_test])
+        X_test = self.vectorizer.transform(np.array([feature_vector[0] for feature_vector in self.feature_vectors_tuples_for_test]))
+        predicted_list = self.classifier.predict(X_test)
         correct = 0
         wrong = 0
-        for i in range(0, len(classified_labels)):
-            #print classified_labels[i] +' ' + self.feature_vectors_tuples_for_test[i][1]
-            if classified_labels[i] == self.feature_vectors_tuples_for_test[i][1]:
-                correct += 1
-            else:
-                wrong += 1
-        print correct, wrong
+        #if self.sparse_flag:
+         #   X_test = X_test.toarray()
+        accuracy = self.classifier.score(X_test, [test_label[1] for test_label in self.feature_vectors_tuples_for_test])
+        print accuracy
+        classifier_metric_file = open('DecisionTree.mtc','w')
+        classifier_metric_file.write("Accuracy - "+str(accuracy))
+        classifier_metric_file.write(classification_report([test_label[1] for test_label in self.feature_vectors_tuples_for_test],predicted_list))
+        classifier_metric_file.close()
 
     def classify_decision_tree(self):
 
@@ -79,16 +66,20 @@ class Classifier:
                 correct += 1
             else:
                 wrong += 1
-        print correct, wrong
+        print correct/wrong
 
 
     #separates train and test data
     def preprare_train_and_test_set(self):
         for topic,topic_vector in self.feature_vectors.iteritems():
-            train_data_limit = int(0.8*len(topic_vector))
+            train_data_limit = int(0.7*len(topic_vector))
             i = 0
             for doc_id,feature_vector in topic_vector.iteritems():
-                classify_tuple = (feature_vector[self.feature_type], topic)
+
+                classify_tuple = (dict(feature_vector[self.feature_type].items()+feature_vector['places'].items()), topic)
+                #classify_tuple = (feature_vector[self.feature_type], topic)
+                #classify_tuple = (feature_vector['places'], topic)
+
                 i = i+1
                 if i <= train_data_limit:
                     self.feature_vectors_tuples_for_train.append(classify_tuple)
@@ -112,17 +103,26 @@ class Classifier:
 
 
 def main():
-    classifier = Classifier('term_frequencies')
+    #MultinomialNB(),DecisionTreeClassifier(max_depth=200),KNeighborsClassifier(n_neighbors=5,weights='distance')
+
+    classifier = Classifier('term_frequencies',MultinomialNB(),True)
     classifier.prepare_data_for_classify()
     start = time.clock()
-    classifier.classify_naive_bayes(MultinomialNB())
+    classifier.train_classifier()
     end = time.clock()
-    print end - start, 'seconds to train and classify with naive_bayes'
-
+    print end - start, 'seconds to train'
+    start = time.clock()
+    classifier.test_classifier()
+    end = time.clock()
+    print end - start, 'seconds to test'
+    #start = time.clock()
+    #classifier.classify_naive_bayes(KNeighborsClassifier(n_neighbors=5,weights='distance'))
+    #end = time.clock()
+    #print end - start, 'seconds to train and classify with n neighbors'
     #code for decision tree. Not sure it works well yet
     #start = time.clock()
     #classifier.classify_decision_tree()
     #end = time.clock()
     #print end - start, 'seconds to train and classify with decision tree'
-    #classifier.create_word_dict()
+
 if __name__ == "__main__": main()
