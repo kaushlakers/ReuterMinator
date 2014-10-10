@@ -9,9 +9,10 @@ import time
 from sklearn.feature_extraction import DictVectorizer
 import numpy as np
 class Classifier:
-    def __init__(self, feature_type, classifier_type, sparse_flag):
+    def __init__(self, feature_type, classifier_name, classifier, sparse_flag):
         self.feature_type = feature_type
-        self.classifier = classifier_type
+        self.classifier_name = classifier_name
+        self.classifier = classifier
         self.feature_vectors = {}
         self.feature_vectors_tuples_for_train = []
         self.feature_vectors_tuples_for_test = []
@@ -48,7 +49,7 @@ class Classifier:
          #   X_test = X_test.toarray()
         accuracy = self.classifier.score(X_test, [test_label[1] for test_label in self.feature_vectors_tuples_for_test])
         print accuracy
-        classifier_metric_file = open('DecisionTree.mtc','w')
+        classifier_metric_file = open(self.classifier_name+'.mtc','w')
         classifier_metric_file.write("Accuracy - "+str(accuracy))
         classifier_metric_file.write(classification_report([test_label[1] for test_label in self.feature_vectors_tuples_for_test],predicted_list))
         classifier_metric_file.close()
@@ -76,8 +77,8 @@ class Classifier:
             i = 0
             for doc_id,feature_vector in topic_vector.iteritems():
 
-                classify_tuple = (dict(feature_vector[self.feature_type].items()+feature_vector['places'].items()), topic)
-                #classify_tuple = (feature_vector[self.feature_type], topic)
+                #classify_tuple = (dict(feature_vector[self.feature_type].items()+feature_vector['places'].items()), topic)
+                classify_tuple = (feature_vector[self.feature_type], topic)
                 #classify_tuple = (feature_vector['places'], topic)
 
                 i = i+1
@@ -105,16 +106,39 @@ class Classifier:
 def main():
     #MultinomialNB(),DecisionTreeClassifier(max_depth=200),KNeighborsClassifier(n_neighbors=5,weights='distance')
 
-    classifier = Classifier('term_frequencies',MultinomialNB(),True)
+    classifier = Classifier('term_frequencies', "Naive_Bayes", MultinomialNB(), True)
     classifier.prepare_data_for_classify()
     start = time.clock()
     classifier.train_classifier()
     end = time.clock()
-    print end - start, 'seconds to train'
+    print end - start, 'seconds to train MultinomialNB'
     start = time.clock()
     classifier.test_classifier()
     end = time.clock()
-    print end - start, 'seconds to test'
+    print end - start, 'seconds to test MultinomialNB'
+
+    classifier = Classifier('term_frequencies', "KNeighbors",KNeighborsClassifier(n_neighbors=5,weights='distance'), True)
+    classifier.prepare_data_for_classify()
+    start = time.clock()
+    classifier.train_classifier()
+    end = time.clock()
+    print end - start, 'seconds to train kneighbors'
+    start = time.clock()
+    classifier.test_classifier()
+    end = time.clock()
+    print end - start, 'seconds to test kneighbors'
+
+    classifier = Classifier('term_frequencies', "DecisionTree",DecisionTreeClassifier(max_depth=200), False)
+    classifier.prepare_data_for_classify()
+    start = time.clock()
+    classifier.train_classifier()
+    end = time.clock()
+    print end - start, 'seconds to train decision tree'
+    start = time.clock()
+    classifier.test_classifier()
+    end = time.clock()
+    print end - start, 'seconds to test decision tree'
+
     #start = time.clock()
     #classifier.classify_naive_bayes(KNeighborsClassifier(n_neighbors=5,weights='distance'))
     #end = time.clock()
