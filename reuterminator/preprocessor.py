@@ -46,7 +46,7 @@ class Preprocessor:
         #Creating a separate dict for this data as it is used often
         self.tokenized_body_cleaned_dict = {}
 
-        #
+
         self.dataset_body_word_dict = {}
         #dict of feature vector with tfidf feature
         self.tfidf_dict = {}
@@ -66,7 +66,10 @@ class Preprocessor:
         self.topic_list = self.parser.get_all_topics()
         self.places_list = self.parser.get_all_places()
         print sorted(self.places_list)
-        self.topic_wise_dict = {topic:{} for topic in self.topic_list}
+        self.topic_wise_dict = {}
+        for topic in self.topic_list:
+            self.topic_wise_dict[topic] = {}
+        #self.topic_wise_dict = {topic:{} for topic in self.topic_list}
         print self.topic_wise_dict
         #return self.parsed_data
 
@@ -196,7 +199,10 @@ class Preprocessor:
     def populate_dictionary_with_class_labels(self, feature_dict):
         for doc_id, feature in feature_dict.iteritems():
             for topic in self.parsed_data[doc_id]['topics']:
-                all_places = {place:0 for place in self.places_list}
+                all_places = {}
+                for place in self.places_list:
+                    all_places[place] = 0
+                #all_places = {place:0 for place in self.places_list}
                 updated_places = {}
                 for place in self.parsed_data[doc_id]['places']:
                     if place in all_places:
@@ -229,9 +235,17 @@ class Preprocessor:
 
     def convert_to_utf(self, input):
         if isinstance(input, dict):
-            return {self.convert_to_utf(key): self.convert_to_utf(value) for key, value in input.iteritems()}
+            temp_dict = {}
+            for key,value in input.iteritems():
+                temp_dict[self.convert_to_utf(key)] = self.convert_to_utf(value)
+            return temp_dict
+            #return {self.convert_to_utf(key): self.convert_to_utf(value) for key, value in input.iteritems()}
         elif isinstance(input, list):
-            return [self.convert_to_utf(element) for element in input]
+            temp_list = []
+            for element in input:
+                temp_list.append(self.convert_to_utf(element))
+            return temp_list
+            #return [self.convert_to_utf(element) for element in input]
         elif isinstance(input, unicode):
             return input.encode('utf-8')
         else:

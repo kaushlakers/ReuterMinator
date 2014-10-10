@@ -30,8 +30,13 @@ class Classifier:
     def train_classifier(self):
         #classifier = SklearnClassifier(classifier_type)
         #self.classifier = classifier_type
-        X = np.array([feature_vector[0] for feature_vector in self.feature_vectors_tuples_for_train])
-        Y = np.array([feature_vector[1] for feature_vector in self.feature_vectors_tuples_for_train])
+        X = []
+        Y = []
+        for feature_vector in self.feature_vectors_tuples_for_train:
+            X.append(feature_vector[0])
+            Y.append(feature_vector[1])
+        X = np.array(X)
+        Y = np.array(Y)
         self.vectorizer = DictVectorizer(dtype=float, sparse=self.sparse_flag)
         X = self.vectorizer.fit_transform(X)
         #if self.sparse_flag:
@@ -41,19 +46,24 @@ class Classifier:
 
     def test_classifier(self):
         print "testing classifier"
-        X_test = self.vectorizer.transform(np.array([feature_vector[0] for feature_vector in self.feature_vectors_tuples_for_test]))
-        predicted_list = self.classifier.predict(X_test)
+        X_test = []
+        Y_true = []
+        for feature_vector in self.feature_vectors_tuples_for_test:
+            X_test.append(feature_vector[0])
+            Y_true.append(feature_vector[1])
+        X_test = self.vectorizer.transform(np.array(X_test))
+        Y_pred = self.classifier.predict(X_test)
         correct = 0
         wrong = 0
         #if self.sparse_flag:
          #   X_test = X_test.toarray()
-        accuracy = self.classifier.score(X_test, [test_label[1] for test_label in self.feature_vectors_tuples_for_test])
+        accuracy = self.classifier.score(X_test, Y_true)
         print accuracy
         classifier_metric_file = open(self.classifier_name+'.mtc','w')
         classifier_metric_file.write("Accuracy - "+str(accuracy))
-        classifier_metric_file.write(classification_report([test_label[1] for test_label in self.feature_vectors_tuples_for_test],predicted_list))
+        classifier_metric_file.write(classification_report(Y_true, Y_pred))
         classifier_metric_file.close()
-
+    '''
     def classify_decision_tree(self):
 
         print "training decision tree"
@@ -68,9 +78,10 @@ class Classifier:
             else:
                 wrong += 1
         print correct/wrong
-
+        '''
 
     #separates train and test data
+
     def preprare_train_and_test_set(self):
         for topic,topic_vector in self.feature_vectors.iteritems():
             train_data_limit = int(0.7*len(topic_vector))
@@ -92,13 +103,22 @@ class Classifier:
 
     def convert_to_utf(self, input):
         if isinstance(input, dict):
-            return {self.convert_to_utf(key): self.convert_to_utf(value) for key, value in input.iteritems()}
+            temp_dict = {}
+            for key,value in input.iteritems():
+                temp_dict[self.convert_to_utf(key)] = self.convert_to_utf(value)
+            return temp_dict
+            #return {self.convert_to_utf(key): self.convert_to_utf(value) for key, value in input.iteritems()}
         elif isinstance(input, list):
-            return [self.convert_to_utf(element) for element in input]
+            temp_list = []
+            for element in input:
+                temp_list.append(self.convert_to_utf(element))
+            return temp_list
+            #return [self.convert_to_utf(element) for element in input]
         elif isinstance(input, unicode):
             return input.encode('utf-8')
         else:
             return input
+
 
 
 
