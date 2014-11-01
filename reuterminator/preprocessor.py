@@ -14,10 +14,14 @@ import os
 import os.path
 import json
 import time
+import collections
 import matplotlib
 import math
 import itertools
-
+import numpy as np
+from scipy.sparse import csr_matrix
+from sklearn.feature_extraction.text import *
+from sklearn.externals import joblib
 ##
 #   Each parsed_data key-value is of the form:
 '''
@@ -55,8 +59,10 @@ class Preprocessor:
         self.topic_list = []
         self.places_list = []
         self.bigram_dict = {}
-        self.global_bigram_dict = {}
-        #self.data_set_directory = d
+        self.topic_list = []
+        self.places_list = []
+        self.docs = [] #list of the text in each doc
+        self.topic_per_doc = [] #list of topic considered for each doc
 
 
     def get_parsed_data(self):
@@ -64,22 +70,58 @@ class Preprocessor:
         self.parser.parse_all_docs()
         self.parsed_data = self.parser.get_parsed_dataset()
         self.topic_list = self.parser.get_all_topics()
+        self.topic_freq_dict = self.parser.all_topics_dict
         self.places_list = self.parser.get_all_places()
-        print sorted(self.places_list)
         self.topic_wise_dict = {}
         for topic in self.topic_list:
             self.topic_wise_dict[topic] = {}
         #self.topic_wise_dict = {topic:{} for topic in self.topic_list}
-        print self.topic_wise_dict
         #return self.parsed_data
 
-    ''' Method that removes stop words and stems tokens '''
+
+    #Pass feature type to this function and it will generate feature vector
+    def feature_generator(self, feature_type):
+        #for doc_id,doc_attributes in self.parsed_data.iteritems():
+        #    self.parsed_data[doc_id]['body'] = PreprocessorHelper.convert_to_utf(doc_attributes['body'])
+        if feature_type == 'tfidf':
+            vectorizer = TfidfVectorizer(min_df=20,decode_error="ignore", tokenizer=self.tokenize)
+        elif feature_type == 'tf':
+            vectorizer = CountVectorizer(min_df=20,decode_error="ignore", tokenizer=self.tokenize)
+        for doc_id,doc_attributes in self.parsed_data.iteritems():
+            #self.docs.append(doc_attributes['body'])
+            if len(doc_attributes['topics']) > 0:
+                max_freq = 0
+                for topic in doc_attributes['topics']:  #taking the most common topic among list of topics for each doc
+                    if self.topic_freq_dict[topic] > max_freq:
+                        max_freq_topic = topic
+                        max_freq = self.topic_freq_dict[topic]
+
+                self.topic_per_doc.append(max_freq_topic)
+                self.docs.append(doc_attributes['body'])
+        self.X = vectorizer.fit_transform(self.docs)
+
+        #storing the generated vector
+        PreprocessorHelper.save_csr_matrix(feature_type+'_vect.npz', self.X)
+
+        #storing the topic(per doc) array separately.
+        PreprocessorHelper.write_to_file('doc_topics.pickle', self.topic_per_doc)
+
+    def tokenize(self, text):
+        tokenizer = RegexpTokenizer(r'[A-Za-z\-]{2,}')
+        tokenized_text = tokenizer.tokenize(text)
+        words_without_stopwords = PreprocessorHelper.get_words_after_stop_word_removal(tokenized_text)
+        words_stemmed = PreprocessorHelper.get_stemmed_words(words_without_stopwords)
+        return words_stemmed
+
+
+
+'''
 
     def clear_topic_dict(self):
         for topic,docs in self.topic_wise_dict.iteritems():
             self.topic_wise_dict[topic].clear()
 
-    def clean_data(self):
+        def clean_data(self):
         i=0
         for doc_id,doc_attributes in self.parsed_data.iteritems():
             body = doc_attributes['body']
@@ -90,6 +132,7 @@ class Preprocessor:
             words_without_stopwords = PreprocessorHelper.get_words_after_stop_word_removal(tokenized_body)
             words_stemmed = PreprocessorHelper.get_stemmed_words(words_without_stopwords)
             self.tokenized_body_cleaned_dict[doc_id] = words_stemmed
+            self.tokenized_doc_list.append(words_stemmed)
 
             #deleting body as we no longer need it as we have tokenized_cleaned_body
             del doc_attributes['body']
@@ -194,7 +237,7 @@ class Preprocessor:
 
 
 
-    '''Accepts a dictionary of doc_id-feature mappings and populates it with appropriate class labels from the parsed_data dictionary'''
+    Accepts a dictionary of doc_id-feature mappings and populates it with appropriate class labels from the parsed_data dictionary
     #TODO: Change this to accept a list of generic class labels
     def populate_dictionary_with_class_labels(self, feature_dict):
         for doc_id, feature in feature_dict.iteritems():
@@ -250,7 +293,7 @@ class Preprocessor:
             return input.encode('utf-8')
         else:
             return input
-
+'''
 
 
 def main():
@@ -260,8 +303,11 @@ def main():
     parsed_data = preprocessor.get_parsed_data()
     end = time.clock()
     print end - start, 'seconds to parse all documents'
-
-
+    start = time.clock()
+    preprocessor.feature_generator('tfidf')
+    end = time.clock()
+    print end - start, 'seconds to generate tfidfs'
+    '''
     start = time.clock()
     preprocessor.clean_data()
     end = time.clock()
@@ -284,7 +330,7 @@ def main():
 
     PreprocessorHelper.write_to_file(preprocessor.topic_wise_dict,"term_frequencies.json")
     preprocessor.clear_topic_dict()
-
+    '''
     '''start = time.clock()
     preprocessor.populate_bigram_feature_vector()
     end = time.clock()

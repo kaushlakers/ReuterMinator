@@ -45,6 +45,7 @@ class ReutersSGMLParser(sgmllib.SGMLParser):
         self.docs = {}
         self.places = []
         self.all_topics = []
+        self.all_topics_dict = {}
         self.all_places = []
         self.all_places_dict = {}
     def parse_all_docs(self):
@@ -91,6 +92,9 @@ class ReutersSGMLParser(sgmllib.SGMLParser):
             self.topics.append(data.lower())
             if data.lower() not in self.all_topics:
                 self.all_topics.append(data.lower())
+                self.all_topics_dict[data.lower()] = 1
+            else:
+                self.all_topics_dict[data.lower()] += 1
 
         elif self.in_places:
             self.places.append(data.lower())
