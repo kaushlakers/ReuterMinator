@@ -13,32 +13,11 @@ import pylab
 class Clusterer:
     def __init__(self):
         #self.parser = parser
-        self.parsed_data = {}
-
-        #Mapping of doc_id to tokenized body that is stemmed and has no stop words.
-        #Creating a separate dict for this data as it is used often
-        self.tokenized_body_cleaned_dict = {}
-
-
-        self.dataset_body_word_dict = {}
-        #dict of feature vector with tfidf feature
-        self.topic_list = []
-        self.places_list = []
         self.docs = [] #list of the text in each doc
         self.doc_topic = [] #list of topic considered for each doc
         #self.data_set_directory = d
 
 
-    def get_parsed_data(self):
-        print 'Retrieving parsed data from datasets'
-        self.parser.parse_all_docs()
-        self.parsed_data = self.parser.get_parsed_dataset()
-        self.topic_list = self.parser.get_all_topics()
-        self.topic_freq_dict = self.parser.all_topics_dict #dict with freq of each topic. Used to take most common topic
-        self.places_list = self.parser.get_all_places()
-        self.topic_wise_dict = {}
-
-    ''' Method that removes stop words and stems tokens '''
 
     def tokenize(self, text):
         tokenizer = RegexpTokenizer(r'[A-Za-z\-]{2,}')
@@ -48,26 +27,6 @@ class Clusterer:
         return words_stemmed
 
     #added feature generator here itself. Didn't want to change preprocessor
-    def feature_generator(self):
-        #for doc_id,doc_attributes in self.parsed_data.iteritems():
-        #    self.parsed_data[doc_id]['body'] = PreprocessorHelper.convert_to_utf(doc_attributes['body'])
-        for doc_id,doc_attributes in self.parsed_data.iteritems():
-            #self.docs.append(doc_attributes['body'])
-            if len(doc_attributes['topics']) > 0:
-                max_freq = 0
-                for topic in doc_attributes['topics']:  #taking the most common topic among list of topics for each doc
-                    if self.topic_freq_dict[topic] > max_freq:
-                        max_freq_topic = topic
-                        max_freq = self.topic_freq_dict[topic]
-
-                self.doc_topic.append(max_freq_topic)
-                self.docs.append(doc_attributes['body'])
-        #print self.docs
-        #tfidf vectorizer. We can make similar functions like this
-        vectorizer = TfidfVectorizer(min_df=20,decode_error="ignore", tokenizer=self.tokenize)
-        self.X = vectorizer.fit_transform(self.docs)
-
-        #print X
 
     def read_feature_files(self, feature_type):
         self.X = PreprocessorHelper.load_csr_matrix(feature_type+"_vect.npz")
@@ -127,14 +86,6 @@ class Clusterer:
 def main():
     clusterer = Clusterer()
     clusterer.read_feature_files("tfidf")
-    '''start = time.clock()
-    parsed_data = clusterer.get_parsed_data()
-    end = time.clock()
-    print end - start, 'seconds to parse all documents'
-    start = time.clock()
-    parsed_data = clusterer.feature_generator()
-    end = time.clock()
-    print end - start, 'seconds to generate tfidfs' '''
     start = time.clock()
     parsed_data = clusterer.cluster_Kmeans(72)
     end = time.clock()
