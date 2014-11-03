@@ -61,7 +61,8 @@ class Preprocessor:
         self.bigram_dict = {}
         self.topic_list = []
         self.places_list = []
-        self.docs = [] #list of the text in each doc
+        self.docs_with_topics = [] #list of the text in each doc
+        self.docs_without_topics = []
         self.topic_per_doc = [] #list of topic considered for each doc
 
 
@@ -84,24 +85,30 @@ class Preprocessor:
         #for doc_id,doc_attributes in self.parsed_data.iteritems():
         #    self.parsed_data[doc_id]['body'] = PreprocessorHelper.convert_to_utf(doc_attributes['body'])
         if feature_type == 'tfidf':
-            vectorizer = TfidfVectorizer(min_df=20,decode_error="ignore", tokenizer=self.tokenize)
+            vectorizer = TfidfVectorizer(min_df=25,decode_error="ignore", tokenizer=self.tokenize)
         elif feature_type == 'tf':
-            vectorizer = CountVectorizer(min_df=20,decode_error="ignore", tokenizer=self.tokenize)
+            vectorizer = CountVectorizer(min_df=30,decode_error="ignore", tokenizer=self.tokenize)
         for doc_id,doc_attributes in self.parsed_data.iteritems():
             #self.docs.append(doc_attributes['body'])
             if len(doc_attributes['topics']) > 0:
+                #docs with topics
                 max_freq = 0
                 for topic in doc_attributes['topics']:  #taking the most common topic among list of topics for each doc
                     if self.topic_freq_dict[topic] > max_freq:
                         max_freq_topic = topic
                         max_freq = self.topic_freq_dict[topic]
-
                 self.topic_per_doc.append(max_freq_topic)
-                self.docs.append(doc_attributes['body'])
-        self.X = vectorizer.fit_transform(self.docs)
+                self.docs_with_topics.append(doc_attributes['body'])
+            else:
+                #docs without topics
+                self.docs_without_topics.append(doc_attributes['body'])
+        #generating vectors
+        self.X_with_topics = vectorizer.fit_transform(self.docs_with_topics)
+        self.X_without_topics = vectorizer.fit_transform(self.docs_without_topics)
 
-        #storing the generated vector
-        PreprocessorHelper.save_csr_matrix(feature_type+'_vect.npz', self.X)
+        #storing the generated vectors
+        PreprocessorHelper.save_csr_matrix(feature_type+'_with_topics_vect.npz', self.X_with_topics)
+        PreprocessorHelper.save_csr_matrix(feature_type+'_without_topics_vect.npz', self.X_without_topics)
 
         #storing the topic(per doc) array separately.
         PreprocessorHelper.write_to_file('doc_topics.pickle', self.topic_per_doc)

@@ -1,13 +1,17 @@
 from reuterssgmlparser import *
 from preprocessorhelper import *
 from sklearn import cluster
+from scipy.cluster import hierarchy
+from scipy.spatial.distance import pdist
 import time
+import sys
 from sklearn.feature_extraction.text import *
 from sklearn import manifold
 from sklearn import metrics
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import numpy as np
+import matplotlib
 import matplotlib.cm as cmx
 import matplotlib.colors as colors
 from matplotlib.backends.backend_pdf import PdfPages
@@ -32,63 +36,134 @@ class Clusterer:
 
 
     def read_feature_files(self, feature_type):
-        self.X = PreprocessorHelper.load_csr_matrix(feature_type+"_vect.npz")
-        self.X_array = self.X.toarray()
+        self.X_with_topics = PreprocessorHelper.load_csr_matrix(feature_type+"_with_topics_vect.npz")
+        self.X_without_topics = PreprocessorHelper.load_csr_matrix(feature_type+"_without_topics_vect.npz")
+        #self.X_array = self.X.toarray()
         self.topic_per_doc = PreprocessorHelper.load_file("doc_topics.pickle")
 
-    def cluster_Kmeans(self, n):
+
+    def cluster_agglomerative(self, n, with_topic):
+        #self.n_clusters = n
+        if with_topic is True:
+            X = self.X_with_topics
+        else:
+            X = self.X_without_topics
+
+        z = hierarchy.single(pdist(X.toarray(), 'cityblock'))
+        self.clusterizer_labels = hierarchy.fcluster(z,n, criterion = 'maxclust')
+        cluster_set = set(self.clusterizer_labels)
+        self.n_clusters = len(cluster_set) #- (1 if -1 in self.clusterizer_labels else 0)
+        if with_topic is True:
+            for i in cluster_set: #initialize a dict with cluster no as key to a list
+                self.clusters[i] = []
+            #adding the actual topics of the cluster to this dict. Mapping of label -> [list of actual topics for the documents clustered in this label]
+            for i in range(0,len(self.topic_per_doc)):
+                self.clusters[self.clusterizer_labels[i]].append(self.topic_per_doc[i])
+            self.generate_piechart_pdf("hierarchical")
+        else:
+            self.calculate_and_print_silhouette(self.X_without_topics, self.clusterizer_labels, "DBSCAN")
+
+
+
+    def cluster_kmeans(self, n, with_topic):
         self.n_clusters = n
         self.clusters = {}
         for i in range(0,n): #initialize a dict with cluster no as key to a list
             self.clusters[i] = []
-        k_means = cluster.KMeans(n_clusters=n)
-        k_means.fit(self.X)
+        clusterizer = cluster.KMeans(n_clusters=n)
+        print self.X_with_topics.shape[0]
 
-        #adding the actual topics of the cluster to this dict. Mapping of label -> [list of actual topics for the documents clustered in this label]
-        for i in range(0,len(self.topic_per_doc)):
-            self.clusters[k_means.labels_[i]].append(self.topic_per_doc[i])
-        self.k_means_labels = k_means.labels_
-        self.k_means_cluster_centers = k_means.cluster_centers_
-        #print metrics.silhouette_score(self.X, self.k_means_labels, metric="euclidean")
-        #self.generate_piechart_pdf()
+        if with_topic is True:
+            X = self.X_with_topics
+        else:
+            X = self.X_without_topics
+
+        #clustering
+        clusterizer.fit(X)
+        self.clusterizer_labels = clusterizer.labels_
+        self.clusterizer_cluster_centers = clusterizer.cluster_centers_
+
+        if with_topic is True:
+            #adding the actual topics of the cluster to this dict. Mapping of label -> [list of actual topics for the documents clustered in this label]
+            for i in range(0,len(self.topic_per_doc)):
+                self.clusters[self.clusterizer_labels[i]].append(self.topic_per_doc[i])
+            self.generate_piechart_pdf("kmeans")
+
+        else:
+            self.calculate_and_print_silhouette(self.X_without_topics, self.clusterizer_labels, "DBSCAN")
+
         #self.plot_cluster()
         #print self.clusters
 
+    def cluster_DBSCAN(self, with_topic):
+
+        self.clusters = {}
+        clusterizer = cluster.DBSCAN(eps=3, min_samples=10, algorithm="auto", metric="manhattan")
+
+
+        if with_topic is True:
+            X = self.X_with_topics
+        else:
+            X = self.X_without_topics
+
+        clusterizer.fit(X.toarray())
+        self.clusterizer_labels = clusterizer.labels_
+        cluster_set = set(self.clusterizer_labels)
+        self.n_clusters = len(cluster_set) #- (1 if -1 in self.clusterizer_labels else 0)
+
+        if with_topic is True:
+            for i in cluster_set: #initialize a dict with cluster no as key to a list
+                self.clusters[i] = []
+            #adding the actual topics of the cluster to this dict. Mapping of label -> [list of actual topics for the documents clustered in this label]
+            for i in range(0,len(self.topic_per_doc)):
+                self.clusters[self.clusterizer_labels[i]].append(self.topic_per_doc[i])
+            self.generate_piechart_pdf("DBSCAN")
+
+        else:
+            self.calculate_and_print_silhouette(self.X_without_topics, self.clusterizer_labels, "DBSCAN")
+
+
+
+    def calculate_and_print_silhouette(self, X, labels, algorithm):
+        print "Silhouette score for kmeans is "+str(metrics.silhouette_score(X, labels, metric="euclidean"))
+
+
     #generates the pdf file
-    def generate_piechart_pdf(self):
-        pdf = PdfPages('piecharts.pdf')
+    def generate_piechart_pdf(self, algorithm):
+        pdf = PdfPages('piecharts_'+algorithm+'.pdf')
         for cluster_label, doc_labels in self.clusters.iteritems():
             self.plot_single_piechart(cluster_label, doc_labels, pdf)
         pdf.close()
 
     #calling this for each cluster (pie chart)
     def plot_single_piechart(self, cluster_no, labels, pdf):
-        cluster_label_dict = {}
+       cluster_label_dict = {}
 
-        for label in labels:
-            if label not in cluster_label_dict:
-                cluster_label_dict[label] = 1
-            else:
-                cluster_label_dict[label] += 1
-        distinct_labels = []
-        label_counts = []
-        colors = []
-        cmap = self.get_cmap(self.n_clusters)
-        i = 0
-        for label,value in cluster_label_dict.iteritems():
-            colors.append(cmap(i))
-            distinct_labels.append(label)
-            label_counts.append(value)
-            i = i+1
+       for label in labels:
+           if label not in cluster_label_dict:
+               cluster_label_dict[label] = 1
+           else:
+               cluster_label_dict[label] += 1
+       distinct_labels = []
+       label_counts = []
+       colors = []
+       cmap = self.get_cmap(30)
+       i = 0
+       for label,value in cluster_label_dict.iteritems():
+           colors.append(cmap(i))
+           distinct_labels.append(label)
+           label_counts.append(value)
+           i = i+1
+       matplotlib.rcParams['font.size'] = 5
 
-        plt.figure(figsize=(8,8))
-        plt.pie(label_counts, explode=None, labels=distinct_labels, colors=colors,
-        autopct='%1.1f%%', shadow=True, startangle=90)
-        # Set aspect ratio to be equal so that pie is drawn as a circle.
-        plt.axis('equal')
-        plt.title("Cluster no " + str(cluster_no))
-        pdf.savefig()
-        plt.close()
+       plt.figure(figsize=(8,8))
+       plt.pie(label_counts, explode=None, labels=distinct_labels, colors=colors,
+       autopct='%1.1f%%', shadow=True, startangle=90)
+       # Set aspect ratio to be equal so that pie is drawn as a circle.
+       plt.axis('equal')
+       plt.suptitle("Cluster no " + str(cluster_no) + "\nNumber of docs in cluster: " + str(len(labels)),fontsize=10)
+       pdf.savefig()
+       plt.close()
 
 
 
@@ -98,7 +173,7 @@ class Clusterer:
     def plot_cluster(self):
         self.scale_data()
         print "finished scale"
-        cmap = self.get_cmap(self.n_clusters)
+        cmap = self.get_cmap(100)
         colors = []
         for i in range(0, self.n_clusters):
             colors.append(cmap(i))
@@ -142,13 +217,41 @@ class Clusterer:
 
 
 def main():
+    sys.setrecursionlimit(10000)
     clusterer = Clusterer()
     clusterer.read_feature_files("tfidf")
     start = time.clock()
-    clusterer.cluster_Kmeans(10)
+    print len(set(clusterer.topic_per_doc))
+    clusterer.cluster_kmeans(len(set(clusterer.topic_per_doc)), True)
     end = time.clock()
-    print end - start, 'seconds to cluster with kmeans'
-    clusterer.generate_piechart_pdf()
+    print end - start, 'seconds to cluster kmeans with topics'
+
+    start = time.clock()
+    clusterer.cluster_kmeans(30, False)
+    end = time.clock()
+    print end - start, 'seconds to cluster kmeans without topics'
+
+    start = time.clock()
+    clusterer.cluster_DBSCAN(True)
+    end = time.clock()
+    print end - start, 'seconds to cluster DBSCAN with topics'
+
+    start = time.clock()
+    clusterer.cluster_DBSCAN(False)
+    end = time.clock()
+    print end - start, 'seconds to cluster DBSCAN without topics'
+
+    start = time.clock()
+    clusterer.cluster_agglomerative(10, True)
+    end = time.clock()
+    print end - start, 'seconds to cluster hierarchical with topics'
+
+    start = time.clock()
+    clusterer.cluster_agglomerative(10, False)
+    end = time.clock()
+    print end - start, 'seconds to cluster hierarchical without topics'
+
+
     #clusterer.plot_cluster()
     #clusterer.scale_data()
 if __name__ == "__main__": main()
