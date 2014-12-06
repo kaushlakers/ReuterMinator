@@ -22,6 +22,22 @@ JUNK_WORDS = ['<','>',':',"''",'#','cc','',',','s','reuter','note','said','mln',
 class PreprocessorHelper:
 
     @staticmethod
+    def write_to_file_json(filename, data):
+       #Converts to json and dumps the contents to a file
+       with open(filename, 'w') as outfile:
+           json.dump(data, outfile, indent=4)
+       outfile.close()
+
+    @staticmethod
+    def read_file_json(filename):
+       #Converts to json and dumps the contents to a file
+       with open(filename, 'r') as infile:
+          data = json.load(infile)
+       infile.close()
+       return data
+
+
+    @staticmethod
     def write_to_file(filename, data):
         #Converts to json and dumps the contents to a file
         with open(filename, 'wb') as outfile:
